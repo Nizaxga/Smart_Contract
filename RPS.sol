@@ -7,7 +7,7 @@ contract RPS {
     uint public numPlayer = 0;
     uint public reward = 0;
     mapping (address => uint) public player_choice; // 0 - Rock, 1 - Paper , 2 - Scissors
-    mapping(address => bool) public player_not_played;
+    mapping (address => bool) public player_not_played;
     address[] public players;
 
     uint public numInput = 0;
@@ -15,7 +15,7 @@ contract RPS {
     function addPlayer() public payable {
         require(numPlayer < 2);
         if (numPlayer > 0) {
-            require(msg.sender != players[0]);
+            require(msg.sender != players[0]);      
         }
         require(msg.value == 1 ether);
         reward += msg.value;
@@ -54,5 +54,10 @@ contract RPS {
             account0.transfer(reward / 2);
             account1.transfer(reward / 2);
         }
+        // Reset Game State
+        delete players;
+        numPlayer = 0;
+        reward = 0;
+        numInput = 0;
     }
 }
