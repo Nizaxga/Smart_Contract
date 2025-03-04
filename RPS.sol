@@ -3,6 +3,9 @@
 
 pragma solidity >=0.7.0 <0.9.0;
 
+import "./CommitReveal.sol";
+import "./TimeUnit.sol";
+
 contract RPS {
     uint public numPlayer = 0;
     uint public reward = 0;
