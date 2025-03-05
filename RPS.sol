@@ -10,6 +10,7 @@ import "./TimeUnit.sol";
 contract RPS {
     CommitReveal public commitReveal;
     Convert public convert;
+    TimeUnit public timeUnit;
 
     uint public numPlayer = 0;
     uint public reward = 0;
@@ -29,10 +30,14 @@ contract RPS {
     ];
 
     uint public numInput = 0;
+    uint public gameStartTime;
+    uint public commitStartTime;
+    uint public TimeOut = 300;
 
-    constructor(address _commitReveal, address _convert) {
+    constructor(address _commitReveal, address _convert, address _timeUnit) {
         commitReveal = CommitReveal(_commitReveal);
         convert = Convert(_convert);
+        timeUnit = TimeUnit(_timeUnit);
     }
 
     function bouncer(address _player) private view returns (bool) {
@@ -55,6 +60,10 @@ contract RPS {
         player_not_played[msg.sender] = true;
         players.push(msg.sender);
         numPlayer++;
+        if (numPlayer == 1) {
+            timeUnit.setStartTime();
+            gameStartTime = block.timestamp;
+        }
     }
 
     // function input(uint choice) public  {
@@ -110,6 +119,23 @@ contract RPS {
             account0.transfer(reward / 2);
             account1.transfer(reward / 2);
         }
+        _resetGame();
+    }
+
+    function refund() public {
+        if (numPlayer == 1 && timeUnit.elapsedSeconds() >= TimeOut) {
+            address payable firstPlayer = payable(players[0]);
+            firstPlayer.transfer(reward);
+        } else if (numPlayer == 2 && numInput == 1 && timeUnit.elapsedSeconds() >= TimeOut) {
+            address payable firstPlayer = payable(players[0]);
+            address payable secondPlayer = payable(players[1]);
+            firstPlayer.transfer(reward / 2);
+            secondPlayer.transfer(reward / 2);
+        }
+        _resetGame();
+    }
+
+    function _resetGame() private {
         delete players;
         numPlayer = 0;
         reward = 0;
