@@ -8,17 +8,18 @@ import "./CommitReveal.sol";
 import "./TimeUnit.sol";
 
 contract RPS {
+    
     CommitReveal public commitReveal;
     Convert public convert;
     TimeUnit public timeUnit;
 
     uint public numPlayer = 0;
+    uint private count = 0;
     uint public reward = 0;
 
     mapping(address => bytes32) public player_commit;
-    mapping (address => uint) public player_choice;
-    mapping (address => bool) public player_not_played;
-
+    mapping(address => uint) public player_choice;
+    mapping(address => bool) public player_not_played;
     mapping(address => bool) public hasCommitted;
 
     address[] public players;
@@ -77,24 +78,50 @@ contract RPS {
     //         _checkWinnerAndPay();
     //     }
     // }
-
-    function commitMove(uint choice) public {
-        require(numPlayer == 2, "Not enough players");
-        require(!hasCommitted[msg.sender], "Already committed");
-        require(choice >= 0 && choice <= 4, "Invalid choice");
-        bytes32 convertedChoice = convert.convert(choice);
-        bytes32 commitment = convert.getHash(convertedChoice);
-        commitReveal.commit(commitment);
-        player_commit[msg.sender] = commitment;
-        player_choice[msg.sender] = choice;
-        hasCommitted[msg.sender] = true;
+    function commit(uint choice) public  {
+        require(numPlayer == 2);
+        require(player_not_played[msg.sender]);
+        require(choice >= 0 && choice <= 4);
+        bytes32 converted = convert.convert(choice);
+        bytes32 hashed = convert.getHash(converted);
+        commitReveal.commit(hashed, msg.sender);
+        player_not_played[msg.sender] = false;
         numInput++;
-        if (numInput == 2) {
-            _revealAndDecideWinner();
+    }
+
+    function reveal(bytes32 hash) public {
+        require(numPlayer == 2);
+        require(numInput == 2);
+        commitReveal.reveal(hash, msg.sender);
+        uint choice = convert.reverse(hash);
+        player_choice[msg.sender] = choice;
+        count++;
+        if(count == 2){
+            _checkWinnerAndPay();
         }
     }
 
-    function _revealAndDecideWinner() private {
+    function refund() public {
+        if (numPlayer == 1 && timeUnit.elapsedSeconds() >= TimeOut) {
+            address payable firstPlayer = payable(players[0]);
+            firstPlayer.transfer(reward);
+        } else if (numPlayer == 2 && numInput == 1 && timeUnit.elapsedSeconds() >= TimeOut) {
+            address payable firstPlayer = payable(players[0]);
+            address payable secondPlayer = payable(players[1]);
+            firstPlayer.transfer(reward / 2);
+            secondPlayer.transfer(reward / 2);
+        }
+        _resetGame();
+    }
+
+    function _resetGame() private {
+        delete players;
+        numPlayer = 0;
+        reward = 0;
+        numInput = 0;
+    }
+
+    function _checkWinnerAndPay() private {
         uint p0Choice = player_choice[players[0]];
         uint p1Choice = player_choice[players[1]];
         address payable account0 = payable(players[0]);
@@ -119,58 +146,10 @@ contract RPS {
             account0.transfer(reward / 2);
             account1.transfer(reward / 2);
         }
-        _resetGame();
-    }
-
-    function refund() public {
-        if (numPlayer == 1 && timeUnit.elapsedSeconds() >= TimeOut) {
-            address payable firstPlayer = payable(players[0]);
-            firstPlayer.transfer(reward);
-        } else if (numPlayer == 2 && numInput == 1 && timeUnit.elapsedSeconds() >= TimeOut) {
-            address payable firstPlayer = payable(players[0]);
-            address payable secondPlayer = payable(players[1]);
-            firstPlayer.transfer(reward / 2);
-            secondPlayer.transfer(reward / 2);
-        }
-        _resetGame();
-    }
-
-    function _resetGame() private {
+        // Reset game state
         delete players;
         numPlayer = 0;
         reward = 0;
         numInput = 0;
     }
-
-    // function _checkWinnerAndPay() private {
-    //     uint p0Choice = player_choice[players[0]];
-    //     uint p1Choice = player_choice[players[1]];
-    //     address payable account0 = payable(players[0]);
-    //     address payable account1 = payable(players[1]);
-    //     if (
-    //         (p0Choice == 0 && (p1Choice == 2 || p1Choice == 3)) ||
-    //         (p0Choice == 1 && (p1Choice == 0 || p1Choice == 4)) || 
-    //         (p0Choice == 2 && (p1Choice == 1 || p1Choice == 3)) || 
-    //         (p0Choice == 3 && (p1Choice == 4 || p1Choice == 1)) ||
-    //         (p0Choice == 4 && (p1Choice == 2 || p1Choice == 0)) 
-    //     ) {
-    //         account0.transfer(reward);
-    //     } else if (
-    //         (p1Choice == 0 && (p0Choice == 2 || p0Choice == 3)) ||
-    //         (p1Choice == 1 && (p0Choice == 0 || p0Choice == 4)) ||
-    //         (p1Choice == 2 && (p0Choice == 1 || p0Choice == 3)) ||
-    //         (p1Choice == 3 && (p0Choice == 4 || p0Choice == 1)) ||
-    //         (p1Choice == 4 && (p0Choice == 2 || p0Choice == 0))
-    //     ) {
-    //         account1.transfer(reward);
-    //     } else {
-    //         account0.transfer(reward / 2);
-    //         account1.transfer(reward / 2);
-    //     }
-    //     // Reset game state
-    //     delete players;
-    //     numPlayer = 0;
-    //     reward = 0;
-    //     numInput = 0;
-    // }
 }

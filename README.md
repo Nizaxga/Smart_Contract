@@ -33,27 +33,32 @@ function refund() public {
 ## การซ่อน Choice และ Commit-Reveal
 
 ```solidity
-function commitMove(uint choice) public {
-    require(numPlayer == 2, "Not enough players");
-    require(!hasCommitted[msg.sender], "Already committed");
-    require(choice >= 0 && choice <= 4, "Invalid choice");
-
-    bytes32 convertedChoice = convert.convert(choice);
-    bytes32 commitment = convert.getHash(convertedChoice);
-    commitReveal.commit(commitment);
-
-    player_commit[msg.sender] = commitment;
-    player_choice[msg.sender] = choice;
-    hasCommitted[msg.sender] = true;
-    numInput++;
-    
-    if (numInput == 2) {
-        _revealAndDecideWinner();
+ function commit(uint choice) public  {
+        require(numPlayer == 2);
+        require(player_not_played[msg.sender]);
+        require(choice >= 0 && choice <= 4);
+        bytes32 converted = convert.convert(choice);
+        bytes32 hashed = convert.getHash(converted);
+        commitReveal.commit(hashed, msg.sender);
+        player_not_played[msg.sender] = false;
+        numInput++;
     }
-}
+
+    function reveal(bytes32 hash) public {
+        require(numPlayer == 2);
+        require(numInput == 2);
+        commitReveal.reveal(hash, msg.sender);
+        uint choice = convert.reverse(hash);
+        player_choice[msg.sender] = choice;
+        count++;
+        if(count == 2){
+            _checkWinnerAndPay();
+        }
+    }
 ```
-ผู้เล่นทำการ **commit** โดยใช้ `convert.convert(choice)` และ `convert.getHash(convertedChoice)`
+ผู้เล่นทำการ **commit** โดยใช้ `convert.convert(choice)` และ `commitReveal.commit()` 
 ค่า hash ของตัวเลือกจะถูกบันทึกแทนค่าจริงเพื่อป้องกันการเปิดเผยตัวเลือกก่อนเวลาอันควร
+หลังจากนั้นเมื่อทั้ง 2 commit แล้วจะสามารถ **reveal** เพื่อแสดง choice ที่เลือกโดยต้องใช้ค่าที่โดน `convert.convert()` ในตอนแรก
 
 ## การจัดการเวลารอผู้เล่นไม่ครบสองคน
 ใน `addPlayer()` หากเป็นผู้เล่นคนแรก เวลาจะถูกบันทึกไว้โดย `timeUnit.setStartTime();`
@@ -79,31 +84,38 @@ function addPlayer() public payable {
 }
 ```
 
-## การ Reveal และตัดสินผู้ชนะ
+## การตัดสินผู้ชนะ
 ```solidity
-function _revealAndDecideWinner() private {
+function _checkWinnerAndPay() private {
     uint p0Choice = player_choice[players[0]];
     uint p1Choice = player_choice[players[1]];
     address payable account0 = payable(players[0]);
     address payable account1 = payable(players[1]);
-
-    if ((p0Choice == 0 && (p1Choice == 2 || p1Choice == 3)) ||
-        (p0Choice == 1 && (p1Choice == 0 || p1Choice == 4)) ||
-        (p0Choice == 2 && (p1Choice == 1 || p1Choice == 3)) ||
+    if (
+        (p0Choice == 0 && (p1Choice == 2 || p1Choice == 3)) ||
+        (p0Choice == 1 && (p1Choice == 0 || p1Choice == 4)) || 
+        (p0Choice == 2 && (p1Choice == 1 || p1Choice == 3)) || 
         (p0Choice == 3 && (p1Choice == 4 || p1Choice == 1)) ||
-        (p0Choice == 4 && (p1Choice == 2 || p1Choice == 0))) {
+        (p0Choice == 4 && (p1Choice == 2 || p1Choice == 0)) 
+    ) {
         account0.transfer(reward);
-    } else if ((p1Choice == 0 && (p0Choice == 2 || p0Choice == 3)) ||
-               (p1Choice == 1 && (p0Choice == 0 || p0Choice == 4)) ||
-               (p1Choice == 2 && (p0Choice == 1 || p0Choice == 3)) ||
-               (p1Choice == 3 && (p0Choice == 4 || p0Choice == 1)) ||
-               (p1Choice == 4 && (p0Choice == 2 || p0Choice == 0))) {
+    } else if (
+        (p1Choice == 0 && (p0Choice == 2 || p0Choice == 3)) ||
+        (p1Choice == 1 && (p0Choice == 0 || p0Choice == 4)) ||
+        (p1Choice == 2 && (p0Choice == 1 || p0Choice == 3)) ||
+        (p1Choice == 3 && (p0Choice == 4 || p0Choice == 1)) ||
+        (p1Choice == 4 && (p0Choice == 2 || p0Choice == 0))
+    ) {
         account1.transfer(reward);
     } else {
         account0.transfer(reward / 2);
         account1.transfer(reward / 2);
     }
-    _resetGame();
+    // Reset game state
+    delete players;
+    numPlayer = 0;
+    reward = 0;
+    numInput = 0;
 }
 ```
 
